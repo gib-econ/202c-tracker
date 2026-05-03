@@ -1,111 +1,148 @@
 ---
+title: Overview
 toc: false
 ---
 
-<div class="hero">
-  <h1>202c-tracker</h1>
-  <h2>Welcome to your new app! Edit&nbsp;<code style="font-size: 90%;">src/index.md</code> to change this page.</h2>
-  <a href="https://observablehq.com/framework/getting-started">Get started<span style="display: inline-block; margin-left: 0.25rem;">↗︎</span></a>
+```js
+import {PREPOST, ALL_UNITS, sh, fN, fK, unitStatus} from "./components/data.js";
+import * as Plot from "npm:@observablehq/plot";
+```
+
+# FPA Section 202(c) Unit Operations Tracker
+
+<div style="font-size:13px;color:var(--theme-foreground-muted);margin:-0.25rem 0 1.5rem;">
+  Created with Claude by <strong>Michael Giberson</strong> &nbsp;·&nbsp;
+  <a href="https://x.com/MichaelGiberso3" target="_blank">X/Twitter</a> &nbsp;·&nbsp;
+  <a href="https://www.linkedin.com/in/michaelgiberson/" target="_blank">LinkedIn</a>
 </div>
 
-<div class="grid grid-cols-2" style="grid-auto-rows: 504px;">
-  <div class="card">${
-    resize((width) => Plot.plot({
-      title: "Your awesomeness over time 🚀",
-      subtitle: "Up and to the right!",
-      width,
-      y: {grid: true, label: "Awesomeness"},
-      marks: [
-        Plot.ruleY([0]),
-        Plot.lineY(aapl, {x: "Date", y: "Close", tip: true})
-      ]
-    }))
-  }</div>
-  <div class="card">${
-    resize((width) => Plot.plot({
-      title: "How big are penguins, anyway? 🐧",
-      width,
-      grid: true,
-      x: {label: "Body mass (g)"},
-      y: {label: "Flipper length (mm)"},
-      color: {legend: true},
-      marks: [
-        Plot.linearRegressionY(penguins, {x: "body_mass_g", y: "flipper_length_mm", stroke: "species"}),
-        Plot.dot(penguins, {x: "body_mass_g", y: "flipper_length_mm", stroke: "species", tip: true})
-      ]
-    }))
-  }</div>
-</div>
+Beginning in May 2025, the U.S. Department of Energy invoked Section 202(c) of the Federal Power Act to issue emergency orders preventing the planned retirements of coal and gas-fired generating units at six facilities across five states. This tracker analyzes hourly EPA CAMPD data for all 10 ordered units — November 2022 through March 2026 — to examine how these units operated before and after the orders took effect.
 
 ---
 
-## Next steps
+```js
+// ── Summary stat cards ──────────────────────────────────────────────────────
+const postRows = PREPOST.filter(d => d.p === "post");
+const stats = [
+  {label:"Zero-generation units post-order", value: postRows.filter(d => d.mwh === 0).length,          sub:"of 10 ordered units"},
+  {label:"Low CF units (<10%) post-order",   value: postRows.filter(d => d.cf < 10 && d.mwh > 0).length, sub:"of 10 ordered units"},
+  {label:"Total post-order generation",      value: fK(postRows.reduce((s,d) => s+d.mwh, 0))+" MWh",  sub:"across all ordered units"},
+  {label:"Total post-order CO₂",            value: fK(postRows.reduce((s,d) => s+d.co2, 0))+" tons",  sub:"across all ordered units"},
+];
 
-Here are some ideas of things you could try…
+display(html`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin:1rem 0 1.5rem;">
+${stats.map(c => html`<div style="background:var(--theme-background-alt);border-left:3px solid #3b82f6;border-radius:6px;padding:14px 16px;">
+  <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--theme-foreground-muted);margin-bottom:6px;">${c.label}</div>
+  <div style="font-size:24px;font-weight:800;">${c.value}</div>
+  <div style="font-size:11px;color:var(--theme-foreground-faint);margin-top:3px;">${c.sub}</div>
+</div>`)}
+</div>`);
+```
 
-<div class="grid grid-cols-4">
-  <div class="card">
-    Chart your own data using <a href="https://observablehq.com/framework/lib/plot"><code>Plot</code></a> and <a href="https://observablehq.com/framework/files"><code>FileAttachment</code></a>. Make it responsive using <a href="https://observablehq.com/framework/javascript#resize(render)"><code>resize</code></a>.
-  </div>
-  <div class="card">
-    Create a <a href="https://observablehq.com/framework/project-structure">new page</a> by adding a Markdown file (<code>whatever.md</code>) to the <code>src</code> folder.
-  </div>
-  <div class="card">
-    Add a drop-down menu using <a href="https://observablehq.com/framework/inputs/select"><code>Inputs.select</code></a> and use it to filter the data shown in a chart.
-  </div>
-  <div class="card">
-    Write a <a href="https://observablehq.com/framework/loaders">data loader</a> that queries a local database or API, generating a data snapshot on build.
-  </div>
-  <div class="card">
-    Import a <a href="https://observablehq.com/framework/imports">recommended library</a> from npm, such as <a href="https://observablehq.com/framework/lib/leaflet">Leaflet</a>, <a href="https://observablehq.com/framework/lib/dot">GraphViz</a>, <a href="https://observablehq.com/framework/lib/tex">TeX</a>, or <a href="https://observablehq.com/framework/lib/duckdb">DuckDB</a>.
-  </div>
-  <div class="card">
-    Ask for help, or share your work or ideas, on our <a href="https://github.com/observablehq/framework/discussions">GitHub discussions</a>.
-  </div>
-  <div class="card">
-    Visit <a href="https://github.com/observablehq/framework">Framework on GitHub</a> and give us a star. Or file an issue if you’ve found a bug!
-  </div>
+---
+
+## Capacity factor: pre-order vs post-order
+
+Generation-weighted averages across all hours in each period. Craig C1 and Schahfer 18 have zero post-order generation.
+
+```js
+// ── Grouped bar chart — pre vs post CF ──────────────────────────────────────
+const cfData = ALL_UNITS.flatMap(u => {
+  const pre  = PREPOST.find(d => d.u === u && d.p === "pre");
+  const post = PREPOST.find(d => d.u === u && d.p === "post");
+  return [
+    {unit: sh(u), period: "Pre-order",  cf: pre?.cf  ?? 0},
+    {unit: sh(u), period: "Post-order", cf: post?.cf ?? 0},
+  ];
+});
+
+display(Plot.plot({
+  marginBottom: 80, marginLeft: 50,
+  width: 820, height: 380,
+  x: {domain: ["Pre-order", "Post-order"], label: null, tickRotate: -40},
+  y: {label: "Capacity factor (%)", grid: true},
+  fx: {label: null, padding: 0.05},
+  color: {domain: ["Pre-order","Post-order"], range: ["#3b82f6","#ef4444"], legend: true},
+  marks: [
+    Plot.barY(cfData, {
+      fx: "unit", x: "period", y: "cf", fill: "period",
+      tip: true, title: d => `${d.unit}\n${d.period}: ${d.cf.toFixed(1)}%`,
+    }),
+    Plot.ruleY([0]),
+  ],
+}));
+```
+
+---
+
+## Unit status summary
+
+```js
+// ── Status table ─────────────────────────────────────────────────────────────
+display(html`<div style="overflow-x:auto;margin:1rem 0;">
+<table style="width:100%;border-collapse:collapse;font-size:13px;">
+<thead><tr style="border-bottom:2px solid var(--theme-foreground-faintest);">
+  ${["Unit","Nameplate MW","Pre CF","Post CF","Change","Post MWh","Status"].map(h =>
+    html`<th style="text-align:left;padding:8px 10px;color:var(--theme-foreground-muted);font-weight:600;white-space:nowrap;">${h}</th>`)}
+</tr></thead>
+<tbody>
+${ALL_UNITS.map(u => {
+  const pre  = PREPOST.find(d => d.u === u && d.p === "pre");
+  const post = PREPOST.find(d => d.u === u && d.p === "post");
+  const chg  = post.cf - pre.cf;
+  const st   = unitStatus(post.cf, post.mwh);
+  return html`<tr style="border-bottom:1px solid var(--theme-foreground-faintest);">
+    <td style="padding:8px 10px;font-weight:600;white-space:nowrap;">${sh(u)}</td>
+    <td style="padding:8px 10px;">${pre.np}</td>
+    <td style="padding:8px 10px;">${pre.cf.toFixed(1)}%</td>
+    <td style="padding:8px 10px;font-weight:700;">${post.cf.toFixed(1)}%</td>
+    <td style="padding:8px 10px;font-weight:600;color:${chg < 0 ? "#ef4444" : "#22c55e"};">${chg > 0 ? "+" : ""}${chg.toFixed(1)}pp</td>
+    <td style="padding:8px 10px;">${fN(post.mwh)}</td>
+    <td style="padding:8px 10px;"><span style="background:${st.color}22;color:${st.color};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;">${st.label}</span></td>
+  </tr>`;
+})}
+</tbody></table></div>`);
+```
+
+---
+
+## Key findings
+
+```js
+display(html`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin:1rem 0 1.5rem;">
+${[
+  {title:"Most ordered units are barely running",
+   text:"Of 10 units under 202(c) emergency orders, 2 had zero post-order generation as of Q1 2026 (Craig C1, Schahfer 18). Several others operate at small fractions of their pre-order capacity factors. The orders maintain capacity availability on paper, but the units are largely not dispatching."},
+  {title:"Campbell continues, but at reduced output",
+   text:"Campbell Units 1 and 3 maintained relatively high post-order generation; Unit 2 effectively idled. Across the plant, post-order generation through December was 39% below the prior-year period. Consumers Energy reported $254M in compliance costs, seeking $135M from MISO ratepayers."},
+  {title:"Cost recovery and ratepayer concerns are central",
+   text:"Independent analyses by Grid Strategies and Synapse Energy Economics estimate compliance costs in the tens of millions per quarter for several plants. Tri-State (Craig), CenterPoint (Culley), and NIPSCO (Schahfer) have each raised cost and reliability concerns publicly."},
+].map(f => html`<div style="background:var(--theme-background-alt);border-radius:6px;padding:14px 16px;border-left:3px solid var(--theme-foreground-faintest);">
+  <div style="font-size:13px;font-weight:700;margin-bottom:6px;">${f.title}</div>
+  <div style="font-size:12px;line-height:1.55;color:var(--theme-foreground-muted);">${f.text}</div>
+</div>`)}
+</div>`);
+```
+
+---
+
+### References
+
+```js
+display(html`<div style="background:var(--theme-background-alt);border-radius:6px;padding:16px 20px;margin:.5rem 0 1rem;">
+<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--theme-foreground-muted);margin-bottom:10px;">References — Overview</div>
+${[
+  ["https://www.powermag.com/doe-has-issued-more-than-40-section-202c-emergency-orders-since-may-2025-heres-an-updated-log/","Power Magazine — comprehensive log of all Section 202(c) orders since May 2025"],
+  ["https://www.energy.gov/ceser/2025-doe-202c-orders","DOE CESER — official 2025 202(c) orders index"],
+  ["https://statepowerproject.org/challenges-to-doe-202c-orders/","State Power Project — log of legal challenges to DOE 202(c) orders"],
+  ["https://www.utilitydive.com/news/doe-emergency-order-campbell-coal-power-plant-appeal/815387/","Utility Dive (March 2026) — Campbell generation 39% below prior year, $254M cost"],
+].map(([url, label]) => html`<div style="display:flex;gap:10px;align-items:flex-start;font-size:12px;line-height:1.5;margin-bottom:6px;">
+  <span style="width:8px;height:8px;border-radius:2px;background:#94a3b8;flex-shrink:0;margin-top:4px;display:inline-block;"></span>
+  <a href="${url}" target="_blank" style="color:var(--theme-foreground-muted);border-bottom:1px dotted var(--theme-foreground-faintest);">${label}</a>
+</div>`)}
+</div>`);
+```
+
+<div style="padding:12px 16px;background:var(--theme-background-alt);border:1px solid var(--theme-foreground-faintest);border-radius:6px;font-size:11px;color:var(--theme-foreground-muted);line-height:1.6;font-style:italic;">
+<strong style="font-style:normal;">Note on AI-generated content:</strong> Key Findings narrative interpretations were drafted with AI assistance based on the underlying CAMPD data and the references above. Readers are encouraged to verify specific factual claims against the cited sources. Quantitative values are derived directly from the EPA CAMPD hourly dataset; interpretive framing reflects judgments that should be independently checked.
 </div>
-
-<style>
-
-.hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  font-family: var(--sans-serif);
-  margin: 4rem 0 8rem;
-  text-wrap: balance;
-  text-align: center;
-}
-
-.hero h1 {
-  margin: 1rem 0;
-  padding: 1rem 0;
-  max-width: none;
-  font-size: 14vw;
-  font-weight: 900;
-  line-height: 1;
-  background: linear-gradient(30deg, var(--theme-foreground-focus), currentColor);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.hero h2 {
-  margin: 0;
-  max-width: 34em;
-  font-size: 20px;
-  font-style: initial;
-  font-weight: 500;
-  line-height: 1.5;
-  color: var(--theme-foreground-muted);
-}
-
-@media (min-width: 640px) {
-  .hero h1 {
-    font-size: 90px;
-  }
-}
-
-</style>
