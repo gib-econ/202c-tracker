@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {"source": "/trends", "destination": "/trends.html"},
+    {"source": "/comparison", "destination": "/comparison.html"},
+    {"source": "/emissions", "destination": "/emissions.html"}
+  ]
+}
